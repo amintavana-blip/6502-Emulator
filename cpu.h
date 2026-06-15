@@ -1,0 +1,46 @@
+#pragma once
+#include <cstdint>
+#include "mem.h"
+
+using Byte = unsigned char;
+using Word = unsigned short;
+using u32 = unsigned int;
+
+class CPU
+{
+
+private:
+    Byte FetchByte(u32 &cycles, Mem &memory);
+    Byte ReadByte(u32 &cycles, Word address, Mem &memory);
+    Word FetchWord(u32 &cycles, Mem &memory);
+    void WriteWord(u32 &cycles, Word value, Word address, Mem &memory);
+
+public:
+    Word PC; // program counter
+    Byte SP; // stack pointer
+
+    Byte A, X, Y; // registers
+
+    struct StatusFlags
+    {
+        Byte C : 1; // carry flag
+        Byte Z : 1; // zero flag
+        Byte V : 1; // overflow flag
+        Byte I : 1; // interrupt disable
+        Byte D : 1; // decimal mode
+        Byte B : 1; // break command
+        Byte N : 1; // negative flag
+
+    } PS; // processor status
+
+    void Reset(Mem &memory);
+    void Excute(u32 &cycles, Mem &memory);
+
+    //==== OPCODES ====//
+
+    static constexpr Byte INS_LDA_IM = 0xA9;
+    static constexpr Byte INS_LDA_ZP = 0xA5;
+    static constexpr Byte INS_LDA_ZPX = 0xB5;
+    static constexpr Byte INS_JSR = 0x20;
+    void LDASetStatus();
+};
