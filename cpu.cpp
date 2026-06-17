@@ -16,10 +16,11 @@ void CPU::DumpRegisters() const
     // std::setw(4) forces the output to pad to 4 characters (e.g., 0xFFFC)
     std::cout << "PC: 0x" << std::hex << std::setfill('0') << std::setw(4) << PC << std::endl;
     std::cout << "SP: 0x" << std::hex << std::setfill('0') << std::setw(2) << (int)SP << std::endl;
-    std::cout << "A:  0x" << std::hex << std::setfill('0') << std::setw(2) << (int)A  << std::endl;
-    std::cout << "X:  0x" << std::hex << std::setfill('0') << std::setw(2) << (int)X  << std::endl;
-    std::cout << "Y:  0x" << std::hex << std::setfill('0') << std::setw(2) << (int)Y  << std::endl;
-    std::cout << "=========================\n" << std::endl;
+    std::cout << "A:  0x" << std::hex << std::setfill('0') << std::setw(2) << (int)A << std::endl;
+    std::cout << "X:  0x" << std::hex << std::setfill('0') << std::setw(2) << (int)X << std::endl;
+    std::cout << "Y:  0x" << std::hex << std::setfill('0') << std::setw(2) << (int)Y << std::endl;
+    std::cout << "=========================\n"
+              << std::endl;
 }
 
 Byte CPU::FetchByte(u32 &cycles, Mem &memory)
@@ -46,16 +47,19 @@ Byte CPU::ReadByte(u32 &cycles, Word address, Mem &memory)
 
 Word CPU::FetchWord(u32 &cycles, Mem &memory)
 {
-    // 1. Grab data from where PC is currently ponting
+    // 1. Grab low byte from PC target (limited to 8 bits by the hardware data bus)
     Word data = memory[PC];
-    // 2. Increament the PC by 1 after fetching the the instruction
+    // 2. Advance PC to point to the next byte in memory
     PC++;
-    // 3. Consuming one cycle from the clock cycle
+    // 3. Consume 1 clock cycle for the memory read operation
     cycles--;
-
+    // 4. Read high byte from RAM and safely expand it into a 16-bit container
     Word highByte = static_cast<Word>(memory[PC]);
+    // 5. Shift high byte to upper 8 bits and merge it with low byte via bitwise OR
     data |= (highByte << 8);
+    // 6. After this we increment the PC one more time because a data is fetched and PC needs to points to the next address
     PC++;
+    // 7. Consume 1 clock cycle for the second memory read operation
     cycles--;
 
     return data;
@@ -73,13 +77,20 @@ void CPU::WriteWord(u32 &cycles, Word value, Word address, Mem &memory)
     cycles--;
 }
 
+    void CPU::WriteByte(u32 &cycles, Byte value, Word address, Mem &memory)
+    {
+        memory[address ]= value;
+        cycles--;
+    }
+
+
 void CPU::LDASetStatus()
 {
     PS.Z = (A == 0);
     PS.N = (A & 0x80) != 0;
 }
 
-void CPU::Excute(u32 &cycles, Mem &memory)
+void CPU::Execute(u32 &cycles, Mem &memory)
 {
 
     while (cycles > 0)
@@ -89,9 +100,8 @@ void CPU::Excute(u32 &cycles, Mem &memory)
 
         switch (opcode)
         {
-        case INS_LDA_IM:
+        case INS_LDA_IM: // Loads a byte of memory into the accumulator setting the zero and negative flags as appropriate.
         {
-
             Byte Value = FetchByte(cycles, memory);
             A = Value;
             LDASetStatus();
@@ -103,15 +113,26 @@ void CPU::Excute(u32 &cycles, Mem &memory)
             Byte ZeroPageAddress = FetchByte(cycles, memory);
             A = ReadByte(cycles, ZeroPageAddress, memory);
             LDASetStatus();
+
+            break;
         }
         case INS_LDA_ZPX:
-
         {
             Byte ZeroPageAddress = FetchByte(cycles, memory);
             ZeroPageAddress += X;
             cycles--;
             A = ReadByte(cycles, ZeroPageAddress, memory);
             LDASetStatus();
+
+            break;
+        }
+        case INS_LDA_ABS:
+        {
+            Word AbsoluteAddress = FetchWord(cycles, memory);
+            A = ReadByte(cycles, AbsoluteAddress, memory);
+            LDASetStatus();
+
+            break;
         }
         case INS_JSR:
         {
@@ -124,7 +145,7 @@ void CPU::Excute(u32 &cycles, Mem &memory)
 
             // 3. Write this 16-bit address onto the stack
             // We pass our current Stack Pointer to target the right RAM slot.
-            WriteWord(cycles, ReturnPointMinusOne, 0x0100 + SP, memory);
+            WriteWord(cycles, ReturnPointMinusOne, STACK_PAGE_BASE + SP, memory);
 
             // 4. Update our Stack Pointer register
             // Because we just shoved a 16-bit Word (2 bytes) onto the stack,
@@ -136,6 +157,7 @@ void CPU::Excute(u32 &cycles, Mem &memory)
 
             break;
         }
+
         default:
             std::cout << "Unknown opcode hit: " << std::hex << (int)opcode << std::endl;
             cycles = 0; // Force-stop the execution loop immediately!
