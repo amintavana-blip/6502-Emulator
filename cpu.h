@@ -35,12 +35,13 @@ public:
 
     void Reset(Mem &memory);
     void Excute(u32 &cycles, Mem &memory);
+    void DumpRegisters() const;
 
     //==== OPCODES ====//
 
     static constexpr Byte INS_LDA_IM = 0xA9;
     static constexpr Byte INS_LDA_ZP = 0xA5;
     static constexpr Byte INS_LDA_ZPX = 0xB5;
-    static constexpr Byte INS_JSR = 0x20;
+    static constexpr Word INS_JSR = 0x20;
     void LDASetStatus();
 };

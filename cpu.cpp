@@ -1,4 +1,5 @@
 #include <iostream>
+#include <iomanip>
 #include "cpu.h"
 
 void CPU::Reset(Mem &memory)
@@ -7,6 +8,18 @@ void CPU::Reset(Mem &memory)
     PC = 0xFFFC;   // Set Program Counter to the Reset Vector
     SP = 0x00FF;   // Stack pointer typically starts at the top of page 1
     PS.B = PS.C = PS.D = PS.I = PS.N = PS.V = PS.Z = 0;
+}
+
+void CPU::DumpRegisters() const
+{
+    std::cout << "\n=== CPU REGISTER DUMP ===" << std::endl;
+    // std::setw(4) forces the output to pad to 4 characters (e.g., 0xFFFC)
+    std::cout << "PC: 0x" << std::hex << std::setfill('0') << std::setw(4) << PC << std::endl;
+    std::cout << "SP: 0x" << std::hex << std::setfill('0') << std::setw(2) << (int)SP << std::endl;
+    std::cout << "A:  0x" << std::hex << std::setfill('0') << std::setw(2) << (int)A  << std::endl;
+    std::cout << "X:  0x" << std::hex << std::setfill('0') << std::setw(2) << (int)X  << std::endl;
+    std::cout << "Y:  0x" << std::hex << std::setfill('0') << std::setw(2) << (int)Y  << std::endl;
+    std::cout << "=========================\n" << std::endl;
 }
 
 Byte CPU::FetchByte(u32 &cycles, Mem &memory)
@@ -40,7 +53,8 @@ Word CPU::FetchWord(u32 &cycles, Mem &memory)
     // 3. Consuming one cycle from the clock cycle
     cycles--;
 
-    data |= (memory[PC] << 8);
+    Word highByte = static_cast<Word>(memory[PC]);
+    data |= (highByte << 8);
     PC++;
     cycles--;
 
@@ -101,16 +115,26 @@ void CPU::Excute(u32 &cycles, Mem &memory)
         }
         case INS_JSR:
         {
-            Word SubAddress = FetchByte(cycles, memory);
+            // 1. Fetch the 16-bit destination address where we want to jump
+            Word SubAddress = FetchWord(cycles, memory);
+
+            // 2. Calculate the return point minus 1
+            // At this exact moment, PC has already marched forward to the byte
             Word ReturnPointMinusOne = PC - 1;
 
+            // 3. Write this 16-bit address onto the stack
+            // We pass our current Stack Pointer to target the right RAM slot.
             WriteWord(cycles, ReturnPointMinusOne, 0x0100 + SP, memory);
 
-            SP-=2;
+            // 4. Update our Stack Pointer register
+            // Because we just shoved a 16-bit Word (2 bytes) onto the stack,
+            // the stack pointer moves down by 2 slots.
+            SP -= 2;
             PC = SubAddress;
 
-            cycles--;
+            cycles--; // JSR requires 1 final internal cycle to finish changing the hardware registers
 
+            break;
         }
         default:
             std::cout << "Unknown opcode hit: " << std::hex << (int)opcode << std::endl;
