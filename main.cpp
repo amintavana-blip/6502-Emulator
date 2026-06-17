@@ -19,7 +19,7 @@ int main()
     memory[0x4243] = 0x84;
 
     u32 cycles = 9;
-    cpu.Excute(cycles,memory);
+    cpu.Execute(cycles,memory);
     cpu.DumpRegisters();
 
     return 0;
