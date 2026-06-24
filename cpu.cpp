@@ -23,7 +23,7 @@ void CPU::DumpRegisters() const
               << std::endl;
 }
 
-Byte CPU::FetchByte(u32 &cycles, Mem &memory)
+Byte CPU::FetchByte(s32 &cycles, Mem &memory)
 {
     // 1. Grab data from where PC is currently ponting
     Byte data = memory[PC];
@@ -35,7 +35,7 @@ Byte CPU::FetchByte(u32 &cycles, Mem &memory)
     return data;
 }
 
-Byte CPU::ReadByte(u32 &cycles, Word address, Mem &memory)
+Byte CPU::ReadByte(s32 &cycles, Word address, Mem &memory)
 {
     // 1. Grab data from a specific target address in RAM
     Byte data = memory[address];
@@ -45,7 +45,15 @@ Byte CPU::ReadByte(u32 &cycles, Word address, Mem &memory)
     return data;
 }
 
-Word CPU::FetchWord(u32 &cycles, Mem &memory)
+Word CPU::ReadWord(s32 &cycles, Word address, Mem &memory)
+{
+    Byte lowByte = ReadByte(cycles, address, memory);
+    Byte highByte = ReadByte(cycles, address + 1, memory);
+
+    return lowByte | (highByte << 8);
+}
+
+Word CPU::FetchWord(s32 &cycles, Mem &memory)
 {
     // 1. Grab low byte from PC target (limited to 8 bits by the hardware data bus)
     Word data = memory[PC];
@@ -65,7 +73,7 @@ Word CPU::FetchWord(u32 &cycles, Mem &memory)
     return data;
 }
 
-void CPU::WriteWord(u32 &cycles, Word value, Word address, Mem &memory)
+void CPU::WriteWord(s32 &cycles, Word value, Word address, Mem &memory)
 {
     Byte lowByte = value & 0xFF; // because the size of the data bus is only limited to 8 bytes we have to get the
                                  // lowByte of the value first, we do that with an and operator.
@@ -77,12 +85,11 @@ void CPU::WriteWord(u32 &cycles, Word value, Word address, Mem &memory)
     cycles--;
 }
 
-    void CPU::WriteByte(u32 &cycles, Byte value, Word address, Mem &memory)
-    {
-        memory[address ]= value;
-        cycles--;
-    }
-
+void CPU::WriteByte(s32 &cycles, Byte value, Word address, Mem &memory)
+{
+    memory[address] = value;
+    cycles--;
+}
 
 void CPU::LDASetStatus()
 {
@@ -90,8 +97,10 @@ void CPU::LDASetStatus()
     PS.N = (A & 0x80) != 0;
 }
 
-void CPU::Execute(u32 &cycles, Mem &memory)
+s32 CPU::Execute(s32 &cycles, Mem &memory)
 {
+
+    s32 CyclesRequested = cycles;
 
     while (cycles > 0)
     {
@@ -100,22 +109,23 @@ void CPU::Execute(u32 &cycles, Mem &memory)
 
         switch (opcode)
         {
-        case INS_LDA_IM: // Loads a byte of memory into the accumulator setting the zero and negative flags as appropriate.
+        case INS_LDA_IM:
         {
             Byte Value = FetchByte(cycles, memory);
             A = Value;
             LDASetStatus();
-
             break;
         }
+
         case INS_LDA_ZP:
         {
             Byte ZeroPageAddress = FetchByte(cycles, memory);
-            A = ReadByte(cycles, ZeroPageAddress, memory);
+            Byte Value = ReadByte(cycles, ZeroPageAddress, memory);
+            A = Value;
             LDASetStatus();
-
             break;
         }
+
         case INS_LDA_ZPX:
         {
             Byte ZeroPageAddress = FetchByte(cycles, memory);
@@ -123,17 +133,89 @@ void CPU::Execute(u32 &cycles, Mem &memory)
             cycles--;
             A = ReadByte(cycles, ZeroPageAddress, memory);
             LDASetStatus();
-
             break;
         }
+
         case INS_LDA_ABS:
         {
             Word AbsoluteAddress = FetchWord(cycles, memory);
             A = ReadByte(cycles, AbsoluteAddress, memory);
             LDASetStatus();
+            break;
+        }
+
+        case INS_LDA_ABSX:
+        {
+            Word BaseAddress = FetchWord(cycles, memory);
+            Word TargetAddress = BaseAddress + X;
+
+            if ((BaseAddress & 0xFF00) != (TargetAddress & 0xFF00))
+            {
+                cycles--;
+            }
+
+            Byte Value = ReadByte(cycles, TargetAddress, memory);
+            A = Value;
+            LDASetStatus();
+            break;
+        }
+
+        case INS_LDA_ABSY:
+        {
+            Word BaseAddress = FetchWord(cycles, memory);
+            Word TargetAddress = BaseAddress + Y;
+
+            if ((BaseAddress & 0xFF00) != (TargetAddress & 0xFF00))
+            {
+                cycles--;
+            }
+
+            Byte Value = ReadByte(cycles, TargetAddress, memory);
+            A = Value;
+            LDASetStatus();
+            break;
+        }
+
+        case INS_LDA_INDX:
+        {
+            Byte ZeroPageAddress = FetchByte(cycles, memory);
+            Byte indexedAddress = ZeroPageAddress + X;
+
+            cycles--;
+
+            Byte lowByte = ReadByte(cycles, indexedAddress, memory);
+            Byte highByte = ReadByte(cycles, (indexedAddress + 1) & 0xFF, memory);
+
+            Word EffectiveAddress = lowByte | (highByte << 8);
+
+            A = ReadByte(cycles, EffectiveAddress, memory);
+            LDASetStatus();
 
             break;
         }
+
+        case INS_LDA_INDY:
+        {
+            Byte ZeroPageAddress = FetchByte(cycles, memory);
+            Byte lowByte = ReadByte(cycles, ZeroPageAddress, memory);
+            Byte highByte = ReadByte(cycles, (ZeroPageAddress + 1) & 0xFF, memory);
+
+            Word baseAddress = lowByte | (highByte << 8);
+
+            Word EffectiveAddressY = baseAddress + Y;
+
+
+            if ((ZeroPageAddress & 0xFF00) != (EffectiveAddressY & 0xFF00))
+            {
+                cycles--;
+            }
+
+            A = ReadByte(cycles, EffectiveAddressY, memory);
+            LDASetStatus();
+
+            break;
+        }
+
         case INS_JSR:
         {
             // 1. Fetch the 16-bit destination address where we want to jump
@@ -154,14 +236,20 @@ void CPU::Execute(u32 &cycles, Mem &memory)
             PC = SubAddress;
 
             cycles--; // JSR requires 1 final internal cycle to finish changing the hardware registers
-
             break;
         }
 
         default:
+        {
             std::cout << "Unknown opcode hit: " << std::hex << (int)opcode << std::endl;
             cycles = 0; // Force-stop the execution loop immediately!
             break;
         }
-    }
+        } // End of switch
+
+    } // End of the while loop
+
+    s32 CyclesActuallyUsed = CyclesRequested - cycles;
+
+    return CyclesActuallyUsed;
 }

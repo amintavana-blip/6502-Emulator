@@ -1,0 +1,5 @@
+if(EXISTS "/Users/matthewstark/6502-Emulator/6502Tests[1]_tests.cmake")
+  include("/Users/matthewstark/6502-Emulator/6502Tests[1]_tests.cmake")
+else()
+  add_test(6502Tests_NOT_BUILT 6502Tests_NOT_BUILT)
+endif()
