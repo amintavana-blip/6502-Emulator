@@ -23,6 +23,8 @@ void CPU::DumpRegisters() const
               << std::endl;
 }
 
+// We use FetchByte exclusively to read the Instruction Stream (the opcodes and operands)
+// because your program code is arranged in a continuous, back-to-back line.
 Byte CPU::FetchByte(s32 &cycles, Mem &memory)
 {
     // 1. Grab data from where PC is currently ponting
@@ -48,6 +50,7 @@ Byte CPU::ReadByte(s32 &cycles, Word address, Mem &memory)
 Word CPU::ReadWord(s32 &cycles, Word address, Mem &memory)
 {
     Byte lowByte = ReadByte(cycles, address, memory);
+
     Byte highByte = ReadByte(cycles, address + 1, memory);
 
     return lowByte | (highByte << 8);
@@ -97,6 +100,12 @@ void CPU::LDASetStatus()
     PS.N = (A & 0x80) != 0;
 }
 
+void CPU::LDXSetStatus()
+{
+    PS.Z = (X == 0);
+    PS.N = (X & 0x80) != 0;
+}
+
 s32 CPU::Execute(s32 &cycles, Mem &memory)
 {
 
@@ -109,6 +118,9 @@ s32 CPU::Execute(s32 &cycles, Mem &memory)
 
         switch (opcode)
         {
+
+        // ===== LDA - Load Accumulator ===== //
+
         case INS_LDA_IM:
         {
             Byte Value = FetchByte(cycles, memory);
@@ -146,6 +158,7 @@ s32 CPU::Execute(s32 &cycles, Mem &memory)
 
         case INS_LDA_ABSX:
         {
+
             Word BaseAddress = FetchWord(cycles, memory);
             Word TargetAddress = BaseAddress + X;
 
@@ -158,6 +171,7 @@ s32 CPU::Execute(s32 &cycles, Mem &memory)
             A = Value;
             LDASetStatus();
             break;
+           
         }
 
         case INS_LDA_ABSY:
@@ -178,24 +192,28 @@ s32 CPU::Execute(s32 &cycles, Mem &memory)
 
         case INS_LDA_INDX:
         {
+            // The reason that we donot use a Word here to store the address is because this instruction happens in zero page (Byte 0 to 255)
             Byte ZeroPageAddress = FetchByte(cycles, memory);
-            Byte indexedAddress = ZeroPageAddress + X;
+            Byte IndexAddress = ZeroPageAddress + X;
 
             cycles--;
+            // As discused the address should not cross the zero page, so when make sure that does not happen.
+            // With an AND operation we dismantle a potential page crossing
+            Byte lowByte = ReadByte(cycles, IndexAddress, memory);
+            Byte highByte = ReadByte(cycles, (IndexAddress + 1) & 0xFF, memory);
 
-            Byte lowByte = ReadByte(cycles, indexedAddress, memory);
-            Byte highByte = ReadByte(cycles, (indexedAddress + 1) & 0xFF, memory);
-
+            // Statying in the zero page is irrelevant for the effective address and it points anywhere in the memory.
             Word EffectiveAddress = lowByte | (highByte << 8);
 
             A = ReadByte(cycles, EffectiveAddress, memory);
             LDASetStatus();
-
+            
             break;
         }
 
         case INS_LDA_INDY:
         {
+
             Byte ZeroPageAddress = FetchByte(cycles, memory);
             Byte lowByte = ReadByte(cycles, ZeroPageAddress, memory);
             Byte highByte = ReadByte(cycles, (ZeroPageAddress + 1) & 0xFF, memory);
@@ -216,6 +234,60 @@ s32 CPU::Execute(s32 &cycles, Mem &memory)
             break;
         }
 
+        // ===== LDX - Load X Register ===== //
+
+        case INS_LDX_IM:
+        {
+            Byte Value = FetchByte(cycles, memory);
+            X = Value;
+            LDXSetStatus();
+            break;
+        }
+
+        case INS_LDX_ZP:
+        {
+            Byte ZeroPageAddress = FetchByte(cycles, memory);
+            Byte Value = ReadByte(cycles, ZeroPageAddress, memory);
+            X = Value;
+            LDXSetStatus();
+            break;
+        }
+
+        case INS_LDX_ZPY:
+        {
+            Byte ZeroPageAddress = FetchByte(cycles, memory);
+            Byte TargetAddress = ZeroPageAddress + Y;
+            cycles--;
+            
+            Byte Value = ReadByte(cycles, TargetAddress, memory);
+            X = Value;
+            LDXSetStatus();
+            break;
+        }
+
+        case INS_LDX_ABS:
+        {
+            Byte lowByte = FetchByte(cycles, memory);
+            Byte highByte = FetchByte(cycles, memory);
+
+            Word TargetAddress = lowByte | (highByte << 8);
+
+            Byte Value = ReadByte(cycles, TargetAddress, memory);
+            X = Value;
+            LDXSetStatus();
+            break;
+        }
+
+        case INS_LDX_ABSY:
+        {
+            Word TargetAddress = FetchWord(cycles, memory);
+            Word FinalAddress = TargetAddress + Y;
+            
+            Byte Value = ReadByte(cycles, FinalAddress, memory);
+            X = Value;
+            LDXSetStatus();
+            break;
+        }
         case INS_JSR:
         {
             // 1. Fetch the 16-bit destination address where we want to jump

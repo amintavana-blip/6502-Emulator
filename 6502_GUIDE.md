@@ -83,15 +83,78 @@ LDASetStatus();
 ---
 ```
 
+## 5. Absolute X (`ABSX`) Addressing Mode
+
+**Absolute X** is an indexed addressing mode that allows the CPU to dynamically target a memory location by combining a fixed 16-bit reference point with the contents of the **X Register**. 
+
+It is one of the most powerful modes on the 6502 for processing linear data structures, like arrays or game graphics tables.
+
+---
+
+### a. How It Works (The Execution Steps)
+
+When the CPU encounters an instruction like `LDA $2000,X`, it performs a 3-step calculation to find the final target address:
+
+1. **Fetch the Base Address:** The instruction supplies a full 16-bit **Base Address** (e.g., `$2000`). This is the fixed starting anchor of your data structure.
+2. **Inject the Offset:** The CPU reads the current 8-bit value inside the **X Register** (e.g., `X = $05`). This acts as the index pointer.
+3. **Generate Target Address:** The CPU adds the offset to the base address to pinpoint the exact data payload slot:
+
+   $$\text{Base Address (\$2000)} + \text{Offset Register (\$05)} = \mathbf{\text{Effective Address (\$2005)}}$$
+
+---
+
+### b. Memory Structure & The Page-Crossing Penalty
+
+Because the 6502's 16-bit memory space is split into individual **256-byte pages**, adding an 8-bit offset to a base address can sometimes cause the calculation to spill over into the next page. 
+
+* **No Page Cross (4 Cycles):** If the addition stays within the same page boundary, the instruction finishes in its standard **4-cycle** time block.
+* **Page Cross (5 Cycles):** If the addition forces the low byte to overflow (exceeding `$FF`), the high byte must increment by 1. Real 6502 hardware requires **1 extra penalty cycle** to stabilize the address bus high byte, pushing the execution to **5 cycles**.
+
+#### Practical Math Example:
+* **Base Address:** `$2070` (High Byte/Page = `$20`)
+* **X Register:** `$92`
+* **Calculation:** `$2070 + $92 = $2102`
+* **Result:** The page shifted from `$20` to `$21`. **Penalty triggered (+1 cycle).**
+
+---
+
+### c. Quick Reference Matrix
+
+| Feature | Specification |
+| :--- | :--- |
+| **Instruction Size** | 3 Bytes (1 Opcode + 2 Base Address Bytes) |
+| **Base Timing** | 4 Clock Cycles |
+| **Page-Cross Timing** | 5 Clock Cycles (+1 penalty cycle) |
+| **Common Use Case** | Iterating through arrays, reading tables, or clearing blocks of RAM. |
+
+---
+
+### d. Implementation Blueprint (C++)
+
+Inside our emulator, the logic mimics the address bus comparison directly before reading the final data byte:
+
+```cpp
+Word BaseAddress = FetchWord(cycles, memory);    // Read 16-bit base
+Word TargetAddress = BaseAddress + X;            // Add 8-bit offset
+
+// Check if the page (high byte) changed
+if ((BaseAddress & 0xFF00) != (TargetAddress & 0xFF00))
+{
+    cycles--; // Burn 1 extra cycle for the page cross stabilization
+}
+
+Byte FinalValue = ReadByte(cycles, TargetAddress, memory);
+
 ### 5. Jump to Subroutine (`INS_JSR`)
 Transfers program control to a new execution target address after pushing the current return address (minus 1) onto the system stack. 
 * **Syntax:** `JSR $8000`
 * **Total Cycles:** 6
 * **Formula:** $\text{Stack} \leftarrow \text{PC} - 1$, then $\text{PC} = \text{Target Address}$
 
-
+---
 
 ```cpp
+
 case INS_JSR:
 {
     // 1. Fetch the 16-bit destination address where we want to jump

@@ -1,6 +1,7 @@
 #include <gtest/gtest.h>
 #include "cpu.h"
 
+
 void DumpMemory(const Mem &memory, Word startAddress, Word endAddress)
 {
     std::cout << "\n--- MEMORY HEX DUMP ---" << std::endl;
@@ -25,9 +26,9 @@ void DumpMemory(const Mem &memory, Word startAddress, Word endAddress)
             std::cout << std::endl;
         }
     }
-    std::cout << "-----------------------\n"
-              << std::endl;
+    std::cout << "-----------------------\n"<< std::endl;
 }
+
 
 class m6502Test : public testing::Test
 {
@@ -54,34 +55,37 @@ static void BasicVerification(const CPU &cpu, const CPU &cpuCopy)
 }
 
 TEST_F(m6502Test, LDAImmediateCanLoadValueIntoA)
-{
-
+{   
     // 1. GIVEN: Access the opcode via CPU:: namespace
     mem[0xFFFC] = CPU::INS_LDA_IM;
-    mem[0xFFFD] = 0x84;
+    mem[0xFFFD] = 0x24;
 
     // 2. WHEN: Create a real u32 variable to pass into your Execute reference
     s32 cycles = 2;
     s32 CyclesConsumed = cpu.Execute(cycles, mem);
 
     // 3. THEN: Access your flags via the 'PS' struct instance (cpu.PS.Z and cpu.PS.N)
-    EXPECT_EQ(cpu.A, 0x84);
+    EXPECT_EQ(cpu.A, 0x24);
     EXPECT_FALSE(cpu.PS.Z);
-    EXPECT_TRUE(cpu.PS.N);
+    EXPECT_FALSE(cpu.PS.N);
     EXPECT_EQ(CyclesConsumed, 2);
     BasicVerification(cpu, cpuCopy);
+    
 }
 
 TEST_F(m6502Test, LDAZeroPageCanLoadValueIntoA)
 {
+
     mem[0xFFFC] = CPU::INS_LDA_ZP;
-    mem[0xFFFD] = 0x42;
-    mem[0x42] = 0x84;
+    mem[0xFFFD] = 0x84;
+    mem[0x0084] = 0x00;
 
     s32 cycles = 3;
     s32 CyclesConsumed = cpu.Execute(cycles, mem);
 
-    EXPECT_EQ(cpu.A, 0x84);
+    EXPECT_EQ(cpu.A, 0x00);
+    EXPECT_TRUE(cpu.PS.Z);
+    EXPECT_FALSE(cpu.PS.N);
     EXPECT_EQ(CyclesConsumed, 3);
     BasicVerification(cpu, cpuCopy);
 }
@@ -123,10 +127,18 @@ TEST_F(m6502Test, LDAAbsModeCanLoadValueIntoA)
 TEST_F(m6502Test, LDAAbsXModeCanLoadValueIntoA)
 {
     mem[0xFFFC] = CPU::INS_LDA_ABSX;
-    mem[0xFFFD] = 0x70;
-    mem[0xFFFE] = 0x20;
+    mem[0xFFFD] = 0x70; // Fetches firstly the low byte of the address from the memory
+    mem[0xFFFE] = 0x20; // Fetches then the high byte of the address from the memory
     cpu.X = 0x92;
 
+    // Now we have the 16 bit address by putting together the high byte and the low byte
+    // 0x20 is the page number and 0x70 is the offset which results in -> 0x2070
+    // Per defenition the value in the X register should be added to this address which
+    // -gives us the target address
+    // In the instruction we have defined if we cross the base address page we need one more cycle
+    // -since in the 6502 emulator every page has 256 Byte, 1 increment in the third bit (bit 2)
+    // -causes a page crossing. So in this case by adding X to the base address, we are in a new page
+    // -which is 0x2102. Attention to the difference of the third bit from 0x2070 -> 0x2102
     mem[0x2102] = 0x42;
 
     s32 cycles = 5;
@@ -144,17 +156,17 @@ TEST_F(m6502Test, LDAAbsYModeCanLoadValueIntoA)
     mem[0xFFFC] = CPU::INS_LDA_ABSY;
     mem[0xFFFD] = 0x70;
     mem[0xFFFE] = 0x20;
-    cpu.Y = 0x92;
+    cpu.Y = 0x42;
 
-    mem[0x2102] = 0x42;
+    mem[0x20B2] = 0x42;
 
-    s32 cycles = 5;
+    s32 cycles = 4;
     s32 cyclesUsed = cpu.Execute(cycles, mem);
 
     EXPECT_EQ(cpu.A, 0x42);
     EXPECT_FALSE(cpu.PS.Z);
     EXPECT_FALSE(cpu.PS.N);
-    EXPECT_EQ(cyclesUsed, 5);
+    EXPECT_EQ(cyclesUsed, 4);
     BasicVerification(cpu, cpuCopy);
 }
 
@@ -196,6 +208,74 @@ TEST_F(m6502Test, LDAIndirectYCanLoadValueIntoA)
     EXPECT_EQ(cyclesUsed, 6);
     BasicVerification(cpu, cpuCopy);
 }
+
+TEST_F(m6502Test, LDXImmediateCanLoadValueIntoX)
+{
+    mem[0xFFFC] = CPU::INS_LDX_IM;
+    mem[0xFFFD] = 0x42;
+
+    s32 cycles = 2;
+    s32 CyclesConsumed = cpu.Execute(cycles, mem);
+
+    EXPECT_EQ(cpu.X, 0x42);
+    EXPECT_FALSE(cpu.PS.Z);
+    EXPECT_FALSE(cpu.PS.N);
+    EXPECT_EQ(CyclesConsumed,2);
+    BasicVerification(cpu, cpuCopy);
+}
+
+TEST_F(m6502Test, LDXZeroPageCanLoadValueIntoX)
+{
+    mem[0xFFFC] = CPU::INS_LDX_ZP;
+    mem[0xFFFD] = 0x24;
+    mem[0x0024] = 0x42;
+
+    s32 cycles = 3;
+    s32 CyclesConsumed = cpu.Execute(cycles, mem);
+
+    EXPECT_EQ(cpu.X, 0x42);
+    EXPECT_FALSE(cpu.PS.Z);
+    EXPECT_FALSE(cpu.PS.N);
+    EXPECT_EQ(CyclesConsumed,3);
+    BasicVerification(cpu, cpuCopy);
+}
+
+TEST_F(m6502Test, LDXZeroPageYModeCanLoadValueIntoX)
+{
+    mem[0xFFFC] = CPU::INS_LDX_ZPY;
+    mem[0xFFFD] = 0x42;
+    cpu.Y = 0xFF;
+    mem[0x0041] = 0x84;
+
+    s32 cycles = 4;
+    s32 CyclesConsumed = cpu.Execute(cycles, mem);
+
+    EXPECT_EQ(cpu.X, 0x84);
+    EXPECT_FALSE(cpu.PS.Z);
+    EXPECT_TRUE(cpu.PS.N);
+    EXPECT_EQ(CyclesConsumed,4);
+    BasicVerification(cpu, cpuCopy);
+}
+
+TEST_F(m6502Test, LDXAbsModeCanLoadValueIntoX)
+{
+    mem[0xFFFC] = CPU::INS_LDX_ABS;
+    mem[0xFFFD] = 0x70;
+    mem[0xFFFE] = 0x20;
+
+    mem[0x2070] = 0x84;
+
+    s32 cycles = 4;
+    s32 CyclesConsumed = cpu.Execute(cycles, mem);
+
+    EXPECT_EQ(cpu.X, 0x84);
+    EXPECT_FALSE(cpu.PS.Z);
+    EXPECT_TRUE(cpu.PS.N);
+    EXPECT_EQ(CyclesConsumed,4);
+    BasicVerification(cpu, cpuCopy);
+}
+
+
 
 TEST_F(m6502Test, CPUDoesNothingWhenWeExcuteZeroCycles)
 {
