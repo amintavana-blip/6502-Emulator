@@ -52,12 +52,29 @@ public:
     static constexpr Word INS_LDA_ABSY = 0xB9;
     static constexpr Byte INS_LDA_INDX = 0xA1;
     static constexpr Byte INS_LDA_INDY = 0xB1;
+
     static constexpr Byte INS_LDX_IM = 0xA2;
     static constexpr Byte INS_LDX_ZP = 0xA6;
     static constexpr Byte INS_LDX_ZPY = 0xB6;
     static constexpr Word INS_LDX_ABS = 0xAE;
     static constexpr Word INS_LDX_ABSY = 0xBE;
+
+    static constexpr Byte INS_LDY_IM = 0xA0;
+    static constexpr Byte INS_LDY_ZP = 0xA4;
+    static constexpr Byte INS_LDY_ZPX = 0xB4;
+    static constexpr Word INS_LDY_ABS = 0xAC;
+    static constexpr Word INS_LDY_ABSX = 0xBC;
+
+    static constexpr Byte INS_STA_ZP = 0x85;
+    static constexpr Byte INS_STA_ZPX = 0x95;
+    static constexpr Word INS_STA_ABS = 0x8D;
+    static constexpr Word INS_STA_ABSX = 0x9D;
+    static constexpr Word INS_STA_ABSY = 0x99;
+    static constexpr Byte INS_STA_INDX = 0x81;
+    static constexpr Byte INS_STA_INDY = 0x91;
+
     static constexpr Word INS_JSR = 0x20;
     void LDASetStatus();
     void LDXSetStatus();
+    void LDYSetStatus();
 };

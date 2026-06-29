@@ -15,6 +15,7 @@ class Mem
 
     void Initialise();
     Byte& operator[] (u32 address){return Data[address];} 
+    //Byte& operator= (u32 address){return Data[address];}
     const Byte& operator[] (u32 address) const{return Data[address];} // read 1 byte from the memory
 
 };

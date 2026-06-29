@@ -106,6 +106,12 @@ void CPU::LDXSetStatus()
     PS.N = (X & 0x80) != 0;
 }
 
+void CPU::LDYSetStatus()
+{
+    PS.Z = (Y == 0);
+    PS.N = (Y & 0x80) != 0;
+}
+
 s32 CPU::Execute(s32 &cycles, Mem &memory)
 {
 
@@ -119,7 +125,7 @@ s32 CPU::Execute(s32 &cycles, Mem &memory)
         switch (opcode)
         {
 
-        // ===== LDA - Load Accumulator ===== //
+            // ===== LDA - Load Accumulator ===== //
 
         case INS_LDA_IM:
         {
@@ -171,7 +177,6 @@ s32 CPU::Execute(s32 &cycles, Mem &memory)
             A = Value;
             LDASetStatus();
             break;
-           
         }
 
         case INS_LDA_ABSY:
@@ -207,7 +212,7 @@ s32 CPU::Execute(s32 &cycles, Mem &memory)
 
             A = ReadByte(cycles, EffectiveAddress, memory);
             LDASetStatus();
-            
+
             break;
         }
 
@@ -222,7 +227,6 @@ s32 CPU::Execute(s32 &cycles, Mem &memory)
 
             Word EffectiveAddressY = baseAddress + Y;
 
-
             if ((ZeroPageAddress & 0xFF00) != (EffectiveAddressY & 0xFF00))
             {
                 cycles--;
@@ -234,7 +238,7 @@ s32 CPU::Execute(s32 &cycles, Mem &memory)
             break;
         }
 
-        // ===== LDX - Load X Register ===== //
+            // ===== LDX - Load X Register ===== //
 
         case INS_LDX_IM:
         {
@@ -258,7 +262,7 @@ s32 CPU::Execute(s32 &cycles, Mem &memory)
             Byte ZeroPageAddress = FetchByte(cycles, memory);
             Byte TargetAddress = ZeroPageAddress + Y;
             cycles--;
-            
+
             Byte Value = ReadByte(cycles, TargetAddress, memory);
             X = Value;
             LDXSetStatus();
@@ -282,12 +286,132 @@ s32 CPU::Execute(s32 &cycles, Mem &memory)
         {
             Word TargetAddress = FetchWord(cycles, memory);
             Word FinalAddress = TargetAddress + Y;
-            
+
+            if ((TargetAddress & 0xFF00) != (FinalAddress & 0xFF00))
+            {
+                cycles--;
+            }
+
             Byte Value = ReadByte(cycles, FinalAddress, memory);
             X = Value;
             LDXSetStatus();
             break;
         }
+
+            // ===== LDY - Load Y Register ===== //
+
+        case INS_LDY_IM:
+        {
+            Byte Value = FetchByte(cycles, memory);
+            Y = Value;
+            LDYSetStatus();
+            break;
+        }
+
+        case INS_LDY_ZP:
+        {
+            Byte ZeroPageAddress = FetchByte(cycles, memory);
+            Byte Value = ReadByte(cycles, ZeroPageAddress, memory);
+            Y = Value;
+            LDYSetStatus();
+            break;
+        }
+
+        case INS_LDY_ZPX:
+        {
+            Byte ZeroPageAddress = FetchByte(cycles, memory);
+            Byte TargetAddress = ZeroPageAddress + X;
+            cycles--;
+
+            Byte Value = ReadByte(cycles, TargetAddress, memory);
+            Y = Value;
+            LDYSetStatus();
+            break;
+        }
+
+        case INS_LDY_ABS:
+        {
+            Byte lowByte = FetchByte(cycles, memory);
+            Byte highByte = FetchByte(cycles, memory);
+
+            Word TargetAddress = lowByte | (highByte << 8);
+
+            Byte Value = ReadByte(cycles, TargetAddress, memory);
+            Y = Value;
+            LDYSetStatus();
+            break;
+        }
+
+        case INS_LDY_ABSX:
+        {
+            Word TargetAddress = FetchWord(cycles, memory);
+            Word FinalAddress = TargetAddress + X;
+
+            if ((TargetAddress & 0xFF00) != (FinalAddress & 0xFF00))
+            {
+                cycles--;
+            }
+
+            Byte Value = ReadByte(cycles, FinalAddress, memory);
+            Y = Value;
+            LDYSetStatus();
+            break;
+        }
+
+            // ===== STA - Store Accumulator =====
+
+        case INS_STA_ZP:
+        {
+            Byte ZeroPageAddress = FetchByte(cycles, memory);
+            
+            WriteByte(cycles, A, ZeroPageAddress, memory);
+            break;
+        }
+
+        case INS_STA_ZPX:
+        {
+            Byte ZeroPageAddress = FetchByte(cycles, memory);
+            Byte TargetAddress = ZeroPageAddress + X;
+            cycles--;
+
+            WriteByte(cycles, A, TargetAddress, memory);
+            break;
+        }
+
+        case INS_STA_ABS:
+        {
+            Byte lowByte = FetchByte(cycles, memory);
+            Byte highByte = FetchByte(cycles, memory);
+
+            Word TargetAddress = lowByte | (highByte << 8);
+            WriteByte(cycles, A, TargetAddress, memory);
+            break;
+        }
+
+        case INS_STA_ABSX:
+        {
+            Byte lowByte = FetchByte(cycles, memory);
+            Byte highByte = FetchByte(cycles, memory);
+
+            Word TargetAddress = lowByte | (highByte << 8);
+
+            Word FinalAddress = TargetAddress + X;
+            WriteByte(cycles, A, FinalAddress, memory);
+            break;
+        }
+
+        case INS_STA_ABSY:
+        {
+            Byte lowByte = FetchByte(cycles, memory);
+            Byte highByte = FetchByte(cycles, memory);
+
+            Word TargetAddress = lowByte | (highByte << 8);
+
+            Word FinalAddress = TargetAddress + Y;
+            WriteByte(cycles, A, FinalAddress, memory);
+            break;
+        }
+
         case INS_JSR:
         {
             // 1. Fetch the 16-bit destination address where we want to jump

@@ -275,7 +275,182 @@ TEST_F(m6502Test, LDXAbsModeCanLoadValueIntoX)
     BasicVerification(cpu, cpuCopy);
 }
 
+TEST_F(m6502Test, LDXAbsModeYCanLoadValueIntoX)
+{
+    mem[0xFFFC] = CPU::INS_LDX_ABSY;
+    mem[0xFFFD] = 0x70;
+    mem[0xFFFE] = 0x20;
+    cpu.Y = 0x91;
 
+    mem[0x2101] = 0x84;
+
+    s32 cycles = 5;
+    s32 CyclesConsumed = cpu.Execute(cycles, mem);
+
+    EXPECT_EQ(cpu.X, 0x84);
+    EXPECT_FALSE(cpu.PS.Z);
+    EXPECT_TRUE(cpu.PS.N);
+    EXPECT_EQ(CyclesConsumed,5);
+    BasicVerification(cpu, cpuCopy);
+}
+
+TEST_F(m6502Test, LDYImmediateModeCanLoadValueIntoY)
+{
+    mem[0xFFFC] = CPU::INS_LDY_IM;
+    mem[0xFFFD] = 0x84; // Bit 7 set (Negative)
+
+    s32 cycles = 2;
+    s32 CyclesConsumed = cpu.Execute(cycles, mem);
+
+    EXPECT_EQ(cpu.Y, 0x84);
+    EXPECT_FALSE(cpu.PS.Z);
+    EXPECT_TRUE(cpu.PS.N);
+    EXPECT_EQ(CyclesConsumed, 2);
+    BasicVerification(cpu, cpuCopy);
+}
+
+TEST_F(m6502Test, LDYZeroPageModeCanLoadValueIntoY)
+{
+    mem[0xFFFC] = CPU::INS_LDY_ZP;
+    mem[0xFFFD] = 0x42;
+    mem[0x0042] = 0x84;
+
+    s32 cycles = 3;
+    s32 CyclesConsumed = cpu.Execute(cycles, mem);
+
+    EXPECT_EQ(cpu.Y, 0x84);
+    EXPECT_FALSE(cpu.PS.Z);
+    EXPECT_TRUE(cpu.PS.N);
+    EXPECT_EQ(CyclesConsumed, 3);
+    BasicVerification(cpu, cpuCopy);
+}
+
+TEST_F(m6502Test, LDYZeroPageXModeCanLoadValueIntoY)
+{
+    mem[0xFFFC] = CPU::INS_LDY_ZPX;
+    mem[0xFFFD] = 0x42;
+    cpu.X = 0xFF; // 0x42 + 0xFF wraps around to 0x41 inside Zero Page
+    mem[0x0041] = 0x84;
+
+    s32 cycles = 4;
+    s32 CyclesConsumed = cpu.Execute(cycles, mem);
+
+    EXPECT_EQ(cpu.Y, 0x84);
+    EXPECT_FALSE(cpu.PS.Z);
+    EXPECT_TRUE(cpu.PS.N);
+    EXPECT_EQ(CyclesConsumed, 4);
+    BasicVerification(cpu, cpuCopy);
+}
+
+TEST_F(m6502Test, LDYAbsModeCanLoadValueIntoY)
+{
+    mem[0xFFFC] = CPU::INS_LDY_ABS;
+    mem[0xFFFD] = 0x70; // Low Byte
+    mem[0xFFFE] = 0x20; // High Byte
+    mem[0x2070] = 0x84;
+
+    s32 cycles = 4;
+    s32 CyclesConsumed = cpu.Execute(cycles, mem);
+
+    EXPECT_EQ(cpu.Y, 0x84);
+    EXPECT_FALSE(cpu.PS.Z);
+    EXPECT_TRUE(cpu.PS.N);
+    EXPECT_EQ(CyclesConsumed, 4);
+    BasicVerification(cpu, cpuCopy);
+}
+
+TEST_F(m6502Test, LDYAbsModeXCanLoadValueIntoY)
+{
+    mem[0xFFFC] = CPU::INS_LDY_ABSX;
+    mem[0xFFFD] = 0x70; // Low Byte
+    mem[0xFFFE] = 0x20; // High Byte
+    cpu.X = 0x91;       // 0x2070 + 0x91 = 0x2101 (Page cross!)
+    mem[0x2101] = 0x84;
+
+    s32 cycles = 5; // 4 base + 1 penalty cycle
+    s32 CyclesConsumed = cpu.Execute(cycles, mem);
+
+    EXPECT_EQ(cpu.Y, 0x84);
+    EXPECT_FALSE(cpu.PS.Z);
+    EXPECT_TRUE(cpu.PS.N);
+    EXPECT_EQ(CyclesConsumed, 5);
+    BasicVerification(cpu, cpuCopy);
+}
+
+TEST_F(m6502Test, STAZeroPageModeCanLoadValueIntoMemoey)
+{
+    mem[0xFFFC] = CPU::INS_STA_ZP;
+    mem[0xFFFD] = 0x21;
+    cpu.A = 0x84;
+
+    s32 cycles = 3; 
+    s32 CyclesConsumed = cpu.Execute(cycles, mem);
+
+    EXPECT_EQ(mem[0x21], 0x84);
+    EXPECT_EQ(CyclesConsumed, 3);
+    BasicVerification(cpu, cpuCopy);
+}
+TEST_F(m6502Test, STAZeroPageXModeCanLoadValueIntoMemoey)
+{
+    mem[0xFFFC] = CPU::INS_STA_ZPX;
+    mem[0xFFFD] = 0x21;
+    cpu.X = 0xE8;
+    cpu.A = 0x84;
+
+    s32 cycles = 4;
+    s32 CyclesConsumed = cpu.Execute(cycles, mem);
+
+    EXPECT_EQ(mem[0x09], 0x84);
+    EXPECT_EQ(CyclesConsumed, 4);
+    BasicVerification(cpu, cpuCopy);
+}
+
+TEST_F(m6502Test, STAAbsModeCanLoadValueIntoMemoey)
+{
+    mem[0xFFFC] = CPU::INS_STA_ABS;
+    mem[0xFFFD] = 0x70;
+    mem[0xFFFE] = 0x21;
+    cpu.A = 0x84;
+
+    s32 cycles = 4;
+    s32 CyclesConsumed = cpu.Execute(cycles, mem);
+
+    EXPECT_EQ(mem[0x2170], 0x84);
+    EXPECT_EQ(CyclesConsumed, 4);
+    BasicVerification(cpu, cpuCopy);
+}
+
+TEST_F(m6502Test, STAAbsXModeCanLoadValueIntoMemoey)
+{
+    mem[0xFFFC] = CPU::INS_STA_ABSX;
+    mem[0xFFFD] = 0x70;
+    mem[0xFFFE] = 0x21;
+    cpu.X = 0x99;
+    cpu.A = 0x84;
+
+    s32 cycles = 5;
+    s32 CyclesConsumed = cpu.Execute(cycles, mem);
+
+    EXPECT_EQ(mem[0x2209], 0x84);
+    EXPECT_EQ(CyclesConsumed, 5);
+    BasicVerification(cpu, cpuCopy);
+}
+
+TEST_F(m6502Test, STAAbsYModeCanLoadValueIntoMemoey)
+{
+    mem[0xFFFC] = CPU::INS_STA_ABSY;
+    mem[0xFFFD] = 0x70;
+    mem[0xFFFE] = 0x21;
+    cpu.Y = 0x22;
+    cpu.A = 0x84;
+
+    s32 cycles = 5;
+    s32 CyclesConsumed = cpu.Execute(cycles, mem);
+
+    EXPECT_EQ(mem[0x2192], 0x84);
+    EXPECT_EQ(CyclesConsumed, 5);
+    BasicVerification(cpu, cpuCopy);
+}
 
 TEST_F(m6502Test, CPUDoesNothingWhenWeExcuteZeroCycles)
 {
